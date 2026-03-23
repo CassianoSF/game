@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import type { RefObject } from 'react';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
 
 interface CameraControllerProps {
@@ -10,11 +10,18 @@ interface CameraControllerProps {
 
 export function CameraController({ target }: CameraControllerProps) {
     const [rotationAngle, setRotationAngle] = useState(0);
-    const [distance] = useState(45); // Fixed absolute distance to player
+    const [distance, setDistance] = useState(15); // Distance to player (zoomable)
     const [pitch, setPitch] = useState(Math.PI / 3); // Start at ~60 degrees
     const setCameraDragging = useStore((state) => state.setCameraDragging);
 
+    const MIN_DISTANCE = 10;
+    const MAX_DISTANCE = 20;
+
+    const MIN_PITCH = 0.4;
+    const MAX_PITCH = 1.5;
+
     const isDragging = useRef(false);
+    const desiredPosition = useMemo(() => new Vector3(), []);
 
     useEffect(() => {
         const onPointerLockChange = () => {
@@ -42,13 +49,15 @@ export function CameraController({ target }: CameraControllerProps) {
 
                 setRotationAngle(prev => prev - deltaX * 0.002);
 
-                // Pitch control (Vertical Angle)
-                // 0 radians = horizon (flat), PI/2 = directly overhead
-                // Clamp to keep camera high enough. 
-                // Min height 12 with Dist 25 => sin(angle) >= 12/25 = 0.48 => ~0.5 radians (approx 28 deg)
-                // Let's safe clamp between 0.6 (~35 deg) and 1.5 (~85 deg)
-                setPitch(prev => Math.max(0.6, Math.min(1.5, prev + deltaY * 0.002)));
+                setPitch(prev => Math.max(MIN_PITCH, Math.min(MAX_PITCH, prev + deltaY * 0.002)));
             }
+        };
+
+        const handleWheel = (e: WheelEvent) => {
+            setDistance(prev => {
+                const newDistance = prev + e.deltaY * 0.05;
+                return Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, newDistance));
+            });
         };
 
         const handleContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -57,6 +66,7 @@ export function CameraController({ target }: CameraControllerProps) {
         window.addEventListener('mousedown', handleMouseDown);
         window.addEventListener('mouseup', handleMouseUp);
         window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('wheel', handleWheel);
         window.addEventListener('contextmenu', handleContextMenu);
 
         return () => {
@@ -64,6 +74,7 @@ export function CameraController({ target }: CameraControllerProps) {
             window.removeEventListener('mousedown', handleMouseDown);
             window.removeEventListener('mouseup', handleMouseUp);
             window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('wheel', handleWheel);
             window.removeEventListener('contextmenu', handleContextMenu);
         };
     }, []);
@@ -84,7 +95,7 @@ export function CameraController({ target }: CameraControllerProps) {
         const xOffset = Math.sin(rotationAngle) * hOffset;
         const zOffset = Math.cos(rotationAngle) * hOffset;
 
-        const desiredPosition = new Vector3(
+        desiredPosition.set(
             targetPos.x + xOffset,
             targetPos.y + yOffset,
             targetPos.z + zOffset

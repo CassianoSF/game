@@ -1,30 +1,42 @@
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, memo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { RigidBody, RapierRigidBody } from '@react-three/rapier';
-import { Vector3, Raycaster } from 'three';
+import { RigidBody, RapierRigidBody, CapsuleCollider } from '@react-three/rapier';
+import { Vector3, MathUtils, Raycaster } from 'three';
 import type { EnemyData } from '../store';
 import { useStore } from '../store';
+import { ZombieCompleto } from './ZombieCompleto';
+import * as THREE from 'three';
 
-type EnemyState = 'IDLE' | 'WANDER' | 'INVESTIGATE' | 'CHASE' | 'ATTACK';
+type EnemyState = 'IDLE' | 'WANDER' | 'INVESTIGATE' | 'CHASE' | 'ATTACK' | 'DEAD';
 
-export function Enemy({ data }: { data: EnemyData }) {
+export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
     const body = useRef<RapierRigidBody>(null);
+    const meshRef = useRef<THREE.Group>(null);
     const [state, setState] = useState<EnemyState>('IDLE');
-    const { scene, camera } = useThree();
+    const { scene } = useThree();
+    const removeEnemy = useStore(state => state.removeEnemy);
+    const isDead = data.isDead;
+
+    useEffect(() => {
+        if (isDead) {
+            const timer = setTimeout(() => {
+                removeEnemy(data.id);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [isDead, data.id, removeEnemy]);
 
     // AI Refs
     const lastKnownPos = useRef<Vector3 | null>(null);
     const wanderTarget = useRef<Vector3 | null>(null);
     const stateTimer = useRef(0);
-    const raycaster = useMemo(() => new Raycaster(), []);
 
     // Stats
     const sightRange = 15;
     const hearingRange = 20;
-    const fov = Math.PI / 2; // 90 degrees
     const memoryDuration = 5; // Seconds to remember last pos
 
-    useFrame((stateCtx, delta) => {
+    useFrame((_stateCtx, delta) => {
         if (!body.current) return;
 
         const myPos = body.current.translation();
@@ -32,7 +44,6 @@ export function Enemy({ data }: { data: EnemyData }) {
         const playerMesh = scene.getObjectByName('player');
 
         // Defaults
-        let targetPos: Vector3 | null = null;
         let canSeePlayer = false;
         let canHearPlayer = false;
         const playerPos = new Vector3();
@@ -47,8 +58,8 @@ export function Enemy({ data }: { data: EnemyData }) {
             if (dist < sightRange) {
                 // FOV Check (dot product) - forward is roughly velocity or previous dir?
                 // For simplicity, assume 360 vision or check body velocity
-                raycaster.set(myVec, dirToPlayer);
-                raycaster.far = sightRange;
+                const tempRaycaster = new Raycaster(myVec, dirToPlayer);
+                tempRaycaster.far = sightRange;
                 // Intersect mainly walls (static) and player
                 // NOTE: This is expensive if many objects. Ideally raycast against 'environment' layer.
                 // For now, simple distance check + 'walls' check if we had tags.
@@ -144,7 +155,6 @@ export function Enemy({ data }: { data: EnemyData }) {
         // Check for Stun(Knockback) - Use Global Store State
         const stunTime = useStore.getState().stunnedEnemies[data.id];
         if (stunTime && stunTime > Date.now()) {
-            console.log('Enemy is stunned, skipping movement');
             return;
         }
 
@@ -163,52 +173,45 @@ export function Enemy({ data }: { data: EnemyData }) {
             desiredVelocity.subVectors(lastKnownPos.current, myVec).normalize().multiplyScalar(speed);
         }
 
-        // Apply
+        // Velocity-based smooth movement
         const currentVel = body.current.linvel();
-        // Simple steering: lerp velocity for weight / inertia
-        // For physics body, setting linvel directly is stiff, adding force is smoother.
-        // Let's stick to setLinvel for direct control but maybe smooth the change?
+        // Enemies are slightly less responsive/snappy than the player
+        const lerpFactor = 5 * delta;
 
-        if (speed > 0 && desiredVelocity.lengthSq() > 0) {
-            // Steering force: Desired velocity - Current velocity
-            // But with impulse we just add direction * force
-            // Better to just push them in desired direction if they aren't at max speed
-            const maxSpeed = speed;
-            const currentPlaneSpeed = new Vector3(currentVel.x, 0, currentVel.z).length();
+        // Ensure Y velocity is preserved for gravity falling
+        const newX = MathUtils.lerp(currentVel.x, desiredVelocity.x, lerpFactor);
+        const newZ = MathUtils.lerp(currentVel.z, desiredVelocity.z, lerpFactor);
 
-            if (currentPlaneSpeed < maxSpeed) {
-                // Apply impulse in direction of desired movement
-                // We need a force factor to make them move against damping
-                const force = 15; // Impulse strength per frame
-                body.current.applyImpulse({
-                    x: desiredVelocity.x * force * 0.016,
-                    y: 0,
-                    z: desiredVelocity.z * force * 0.016
-                }, true);
-            }
+        body.current.setLinvel({ x: newX, y: currentVel.y, z: newZ }, true);
+
+        // Visual Rotation (Mesh only, physics body is rotation-locked)
+        if (desiredVelocity.lengthSq() > 0.1 && meshRef.current) {
+            const angle = Math.atan2(desiredVelocity.x, desiredVelocity.z);
+            meshRef.current.rotation.set(0, angle, 0);
         }
     });
 
     return (
         <RigidBody
+            type={isDead ? 'fixed' : 'dynamic'}
             ref={body}
+            sensor={isDead}
             position={data.position}
-            colliders="ball"
+            enabledTranslations={[!isDead, !isDead, !isDead]} // Freeze in place when dead
+            colliders={false}
             lockRotations
             friction={1}
-            linearDamping={10}
-            userData={{ type: 'enemy', id: data.id }}
+            restitution={0}
+            linearDamping={1}
+            angularDamping={1}
+            mass={60}
+            ccd={true}
+            userData={{ type: isDead ? 'corpse' : 'enemy', id: data.id }}
         >
-            <mesh castShadow receiveShadow>
-                <sphereGeometry args={[0.7, 16, 16]} />
-                <meshStandardMaterial color={
-                    state === 'ATTACK' ? 'red' :
-                        state === 'CHASE' ? 'orange' :
-                            state === 'INVESTIGATE' ? 'yellow' :
-                                state === 'WANDER' ? 'blue' : 'green'
-                } />
-                {/* Vision Cone visual for debug? */}
-            </mesh>
+            <CapsuleCollider args={[0.5, 0.3]} />
+            <group ref={meshRef} name="enemy">
+                <ZombieCompleto scale={0.008} position={[0, -0.8, 0]} bodyRef={body} state={isDead ? 'DEAD' : state} />
+            </group>
         </RigidBody >
     );
-}
+});

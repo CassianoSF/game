@@ -1,84 +1,83 @@
 import { Canvas } from '@react-three/fiber';
 import { Physics, RigidBody } from '@react-three/rapier';
-import { Suspense, useMemo } from 'react';
+import { useMemo } from 'react';
 import { CanvasTexture, RepeatWrapping, NearestFilter } from 'three';
 import { Player } from './components/Player';
 import { useStore } from './store';
 import { Projectile } from './components/Projectile';
-import { Level } from './components/Level';
+import { ProceduralLevel } from './components/ProceduralLevel';
+import { SimpleLevel } from './components/SimpleLevel';
 import { Cursor } from './components/Cursor';
 import { UI } from './components/UI';
 
 function Ground() {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
-    canvas.width = 2; // Smallest possible for 2x2 check
-    canvas.height = 2;
+    canvas.width = 64;
+    canvas.height = 64;
     const context = canvas.getContext('2d');
     if (context) {
-      context.fillStyle = 'white';
-      context.fillRect(0, 0, 2, 2);
-      context.fillStyle = 'gray'; // or #808080
-      context.fillRect(0, 0, 1, 1);
-      context.fillRect(1, 1, 1, 1);
+      context.fillStyle = '#444'; // Dark gray background
+      context.fillRect(0, 0, 64, 64);
+
+      // Checkboard pattern
+      context.fillStyle = '#555'; // Slightly lighter gray
+      context.fillRect(0, 0, 32, 32);
+      context.fillRect(32, 32, 32, 32);
     }
     const tex = new CanvasTexture(canvas);
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
-    tex.repeat.set(15, 15);
+    tex.repeat.set(1000, 1000);
     tex.magFilter = NearestFilter;
     tex.minFilter = NearestFilter;
-    tex.colorSpace = 'srgb'; // Correct color space
     return tex;
   }, []);
 
   return (
-    <RigidBody type="fixed" colliders="cuboid" friction={1}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
+    <RigidBody type="fixed" friction={1}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[1000, 1000]} />
         <meshStandardMaterial map={texture} />
       </mesh>
     </RigidBody>
   );
 }
 
-function App() {
+export default function App() {
+  const projectiles = useStore((state) => state.projectiles);
+  // Memoize to avoid creating new array on every render
+  const projectileList = useMemo(() => Object.values(projectiles), [projectiles]);
+  const currentLevel = useStore((state) => state.currentLevel);
+
   return (
     <>
-      <Canvas shadows camera={{ position: [0, 20, 10], fov: 50 }}>
-        {/* Lights */}
-        <ambientLight intensity={0.5} />
+      <Canvas shadows camera={{ position: [0, 15, 10], fov: 50 }}>
+        <color attach="background" args={['#202030']} />
+        <fog attach="fog" args={['#202030', 20, 180]} />
+        <ambientLight intensity={1.5} />
         <directionalLight
-          position={[10, 20, 10]}
-          intensity={1}
+          position={[50, 50, 25]}
+          intensity={2}
           castShadow
           shadow-mapSize={[2048, 2048]}
         />
 
-        <Suspense fallback={null}>
-          <Physics debug>
-            <Ground />
-            <Player />
-            <Level />
-            <ProjectileManager />
-          </Physics>
-        </Suspense>
+        <Physics gravity={[0, -9.81, 0]}>
+          <Player />
+
+          {currentLevel === 'procedural' ? <ProceduralLevel /> : <SimpleLevel />}
+          <Ground />
+
+          {/* Projectiles */}
+          {projectileList.map((p) => (
+            <Projectile key={p.id} data={p} />
+          ))}
+
+        </Physics>
       </Canvas>
       <Cursor />
       <UI />
     </>
   );
 }
-
-function ProjectileManager() {
-  const projectiles = useStore((state) => state.projectiles);
-  return (
-    <>
-      {projectiles.map((p) => (
-        <Projectile key={p.id} data={p} />
-      ))}
-    </>
-  );
-}
-
-export default App;

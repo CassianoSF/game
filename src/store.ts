@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { GameRules } from './logic/gameRules';
 
 
 export type WeaponStats = {
@@ -55,12 +56,20 @@ export interface EnemyData {
     id: string;
     position: [number, number, number];
     hp: number; // Add HP
+    isDead?: boolean;
+}
+
+export interface ObstacleData {
+    id: string;
+    position: [number, number, number];
+    scale?: [number, number, number];
 }
 
 interface GameState {
     score: number;
-    projectiles: ProjectileData[];
-    enemies: EnemyData[];
+    projectiles: Record<string, ProjectileData>;
+    enemies: Record<string, EnemyData>;
+    obstacles: Record<string, ObstacleData>;
     isCameraDragging: boolean;
     stunnedEnemies: Record<string, number>;
 
@@ -73,9 +82,16 @@ interface GameState {
     addProjectile: (p: ProjectileData) => void;
     removeProjectile: (id: string) => void;
     addEnemy: (e: EnemyData) => void;
-    damageEnemy: (id: string, amount: number) => void;
-    stunEnemy: (id: string, duration: number) => void;
+    removeEnemy: (id: string) => void;
+    addObstacle: (o: ObstacleData) => void;
+    removeObstacle: (id: string) => void;
+    hitEnemy: (id: string, damage: number, stunDuration: number) => void;
     setCameraDragging: (isDragging: boolean) => void;
+
+    // Level Management
+    currentLevel: 'procedural' | 'simple';
+    setLevel: (level: 'procedural' | 'simple') => void;
+    resetLevel: () => void;
 
     // Inventory Actions
     addToInventory: (weapon: Weapon) => void; // Finds first empty slot
@@ -83,10 +99,12 @@ interface GameState {
     moveItem: (fromContainer: 'inventory' | 'hotbar', fromSlot: number, toContainer: 'inventory' | 'hotbar', toSlot: number) => void;
 }
 
+
 export const useStore = create<GameState>((set) => ({
     score: 0,
-    projectiles: [],
-    enemies: [],
+    projectiles: {},
+    enemies: {},
+    obstacles: {},
     stunnedEnemies: {}, // Init empty
     isCameraDragging: false,
 
@@ -99,57 +117,65 @@ export const useStore = create<GameState>((set) => ({
     ],
     activeSlot: 0,
 
-    increaseScore: () => set((state) => ({ score: state.score + 1 })),
-    addProjectile: (p) => set((state) => ({ projectiles: [...state.projectiles, p] })),
-    removeProjectile: (id) => set((state) => ({ projectiles: state.projectiles.filter((p) => p.id !== id) })),
-    addEnemy: (e) => set((state) => ({ enemies: [...state.enemies, e] })),
-    removeEnemy: (id) => set((state) => ({ enemies: state.enemies.filter((e) => e.id !== id) })),
-    stunEnemy: (id: string, duration: number) => set((state) => ({
-        stunnedEnemies: { ...state.stunnedEnemies, [id]: Date.now() + duration }
-    })),
-    damageEnemy: (id, amount) => set((state) => {
-        const newEnemies = state.enemies.map(e => {
-            if (e.id === id) {
-                return { ...e, hp: e.hp - amount };
-            }
-            return e;
-        }).filter(e => e.hp > 0);
+    currentLevel: 'procedural',
 
-        const countBefore = state.enemies.length;
-        const countAfter = newEnemies.length;
-        if (countAfter < countBefore) {
-            return { enemies: newEnemies, score: state.score + (countBefore - countAfter) };
+    setLevel: (level) => set({ currentLevel: level }),
+    resetLevel: () => set({ enemies: {}, obstacles: {}, projectiles: {}, stunnedEnemies: {} }),
+
+    increaseScore: () => set((state) => ({ score: state.score + 1 })),
+    addProjectile: (p) => set((state) => ({ projectiles: { ...state.projectiles, [p.id]: p } })),
+    removeProjectile: (id: string) => set((state) => {
+        const remaining = Object.fromEntries(
+            Object.entries(state.projectiles).filter(([key]) => key !== id)
+        );
+        return { projectiles: remaining };
+    }),
+    addEnemy: (e) => set((state) => ({ enemies: { ...state.enemies, [e.id]: e } })),
+    removeEnemy: (id: string) => set((state) => {
+        const remaining = Object.fromEntries(
+            Object.entries(state.enemies).filter(([key]) => key !== id)
+        );
+        return { enemies: remaining };
+    }),
+    addObstacle: (o) => set((state) => ({ obstacles: { ...state.obstacles, [o.id]: o } })),
+    removeObstacle: (id: string) => set((state) => {
+        const remaining = Object.fromEntries(
+            Object.entries(state.obstacles).filter(([key]) => key !== id)
+        );
+        return { obstacles: remaining };
+    }),
+    hitEnemy: (id, damage, stunDuration) => set((state) => {
+        const { nextEnemies, nextStunned, scoreIncrease } = GameRules.processHit(
+            state.enemies,
+            state.stunnedEnemies,
+            id,
+            damage,
+            stunDuration
+        );
+
+        if (scoreIncrease > 0) {
+            return { enemies: nextEnemies, stunnedEnemies: nextStunned, score: state.score + scoreIncrease };
         }
-        return { enemies: newEnemies };
+        return { enemies: nextEnemies, stunnedEnemies: nextStunned };
     }),
     setCameraDragging: (isDragging) => set({ isCameraDragging: isDragging }),
 
-    addToInventory: (weapon) => set((state) => {
-        const firstEmpty = state.inventory.indexOf(null);
-        if (firstEmpty === -1) return state; // Full
-        const newInv = [...state.inventory];
-        newInv[firstEmpty] = weapon;
-        return { inventory: newInv };
-    }),
+
+    addToInventory: (weapon) => set((state) => ({
+        inventory: GameRules.addToInventory(state.inventory, weapon)
+    })),
 
     setActiveSlot: (slot) => set({ activeSlot: slot }),
 
     moveItem: (fromContainer, fromSlot, toContainer, toSlot) => set((state) => {
-        // Create copies
-        const newInventory = [...state.inventory];
-        const newHotbar = [...state.hotbar];
-
-        const getList = (c: 'inventory' | 'hotbar') => c === 'inventory' ? newInventory : newHotbar;
-        const sourceList = getList(fromContainer);
-        const targetList = getList(toContainer);
-
-        const itemToMove = sourceList[fromSlot];
-        const itemAtTarget = targetList[toSlot];
-
-        // Swap
-        sourceList[fromSlot] = itemAtTarget;
-        targetList[toSlot] = itemToMove;
-
-        return { inventory: newInventory, hotbar: newHotbar };
+        const { nextInventory, nextHotbar } = GameRules.moveItem(
+            state.inventory,
+            state.hotbar,
+            fromContainer,
+            fromSlot,
+            toContainer,
+            toSlot
+        );
+        return { inventory: nextInventory, hotbar: nextHotbar };
     }),
 }));

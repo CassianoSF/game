@@ -1,15 +1,18 @@
 import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import { useStore } from '../store';
 import { Vector3 } from 'three';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, memo, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 
-export const Projectile = ({ data }: { data: any }) => {
-    const { removeProjectile, damageEnemy, stunEnemy } = useStore();
-    const startTime = useRef(Date.now());
+export const Projectile = memo(({ data }: { data: any }) => {
+    const { removeProjectile, hitEnemy } = useStore();
+    const startTime = useRef(0);
     const bodyRef = useRef<RapierRigidBody>(null);
+    const hitTargets = useRef<Set<string>>(new Set());
+    const impulseDir = useMemo(() => new Vector3(), []);
 
     useEffect(() => {
+        startTime.current = Date.now();
         if (bodyRef.current) {
             bodyRef.current.setLinvel({
                 x: data.direction[0] * data.stats.speed,
@@ -17,11 +20,10 @@ export const Projectile = ({ data }: { data: any }) => {
                 z: data.direction[2] * data.stats.speed
             }, true);
         }
-    }, []); // Run ONLY on mount
+    }, [data.direction, data.stats.speed]);
 
-    // Auto-remove after 2 seconds
     useFrame(() => {
-        if (Date.now() - startTime.current > 2000) {
+        if (Date.now() - startTime.current > 1000) {
             removeProjectile(data.id);
         }
     });
@@ -29,40 +31,45 @@ export const Projectile = ({ data }: { data: any }) => {
     const handleCollision = (payload: any) => {
         const otherUserData = payload.other.rigidBody?.userData as any;
 
-        if (otherUserData?.type === 'enemy') {
-            damageEnemy(otherUserData.id, data.stats.damage);
-            const enemyBody = payload.other.rigidBody;
-            if (enemyBody) {
-                const impulseDir = new Vector3(...data.direction).normalize();
-                const impulseStrength = data.stats.knockback || 2;
-                const impulse = impulseDir.multiplyScalar(impulseStrength);
-                enemyBody.applyImpulse({ x: impulse.x, y: 0, z: impulse.z }, true);
-                stunEnemy(otherUserData.id, 300);
+        if (otherUserData?.type === 'enemy' || otherUserData?.type === 'obstacle') {
+            const isEnemy = otherUserData.type === 'enemy';
+            const entityId = otherUserData.id;
+
+            if (hitTargets.current.has(entityId)) return;
+            hitTargets.current.add(entityId);
+
+            if (isEnemy) {
+                hitEnemy(entityId, data.stats.damage, 300);
             }
-            // removeProjectile(data.id); // Piercing
+
+            const hitBody = payload.other.rigidBody;
+            if (hitBody) {
+                impulseDir.set(data.direction[0], data.direction[1], data.direction[2]).normalize();
+                const impulseStrength = (data.stats.knockback || 2) * 3;
+                const impulse = impulseDir.multiplyScalar(impulseStrength);
+                hitBody.applyImpulse({ x: impulse.x, y: 0, z: impulse.z }, true);
+            }
         }
-        // Walls/Obstacles: Physics engine handles bounce automatically via restitution
     };
 
     return (
         <RigidBody
             ref={bodyRef}
             position={data.position}
-            // Removed linearVelocity prop to prevent reset on re-render
             gravityScale={0}
-            restitution={0} // No bounce
-            friction={1}    // Max friction
-            angularDamping={1} // Stop rolling
-            linearDamping={0.5} // Air resistance (slows down over time too, ensures it stops)
+            restitution={0}
+            friction={1}
+            angularDamping={1}
+            linearDamping={0.5}
             ccd={true}
             onCollisionEnter={handleCollision}
             userData={{ type: 'projectile', id: data.id }}
-            enabledTranslations={[true, false, true]} // Keep on Y plane
+            enabledTranslations={[true, false, true]}
         >
             <mesh>
-                <sphereGeometry args={[0.2, 8, 8]} />
+                <sphereGeometry args={[0.05, 8, 8]} />
                 <meshStandardMaterial color={data.stats.color} emissive={data.stats.color} emissiveIntensity={2} />
             </mesh>
         </RigidBody>
     );
-};
+});

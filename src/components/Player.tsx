@@ -1,9 +1,10 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { RigidBody, RapierRigidBody } from '@react-three/rapier';
-import { Vector3, Raycaster, Plane, Mesh, Quaternion } from 'three';
+import { RigidBody, RapierRigidBody, CapsuleCollider } from '@react-three/rapier';
+import { Vector3, Raycaster, Plane, Mesh, Quaternion, MathUtils } from 'three';
 import { CameraController } from './CameraController';
 import { useStore } from '../store';
+import { BonecoCompleto } from './BonecoCompleto';
 
 export function Player() {
     const body = useRef<RapierRigidBody>(null);
@@ -13,6 +14,11 @@ export function Player() {
     const addProjectile = useStore((state) => state.addProjectile);
     const equippedWeapon = hotbar[activeSlot];
     const { camera } = useThree();
+
+    // Reuse Vector3 objects to avoid allocation
+    const camForward = useMemo(() => new Vector3(), []);
+    const camRight = useMemo(() => new Vector3(), []);
+    const direction = useMemo(() => new Vector3(), []);
 
     // Controls
     const keys = useRef<{ [key: string]: boolean }>({});
@@ -56,7 +62,7 @@ export function Player() {
             mesh.current.getWorldDirection(direction);
             mesh.current.getWorldQuaternion(quaternion);
 
-            const offset = 2.0;
+            const offset = 0.3;
 
             // Handle multiple projectiles (Shotgun)
             for (let i = 0; i < equippedWeapon.stats.projectiles; i++) {
@@ -104,7 +110,7 @@ export function Player() {
 
     // ... raycaster setup ...
 
-    useFrame((state) => {
+    useFrame((state, delta) => {
         // Shooting Loop
         if (isShooting.current && equippedWeapon) {
             if (state.clock.elapsedTime - lastShootTime.current > equippedWeapon.stats.fireRate) {
@@ -116,20 +122,19 @@ export function Player() {
         if (!body.current || !mesh.current) return;
 
         // --- Movement (WASD) ---
-        const speed = 10;
-        const direction = new Vector3();
+        const speed = 5;
+        direction.set(0, 0, 0);
 
         // Get camera forward direction (projected to XZ plane)
-        const camForward = new Vector3();
         camera.getWorldDirection(camForward);
-        camForward.y = 0;
-        camForward.normalize();
+        const tempForward = camForward.clone();
+        tempForward.y = 0;
+        tempForward.normalize();
 
-        const camRight = new Vector3();
-        camRight.crossVectors(camForward, new Vector3(0, 1, 0));
+        camRight.crossVectors(tempForward, new Vector3(0, 1, 0));
 
-        if (keys.current['w']) direction.add(camForward);
-        if (keys.current['s']) direction.sub(camForward);
+        if (keys.current['w']) direction.add(tempForward);
+        if (keys.current['s']) direction.sub(tempForward);
         if (keys.current['a']) direction.sub(camRight);
         if (keys.current['d']) direction.add(camRight);
 
@@ -137,18 +142,17 @@ export function Player() {
             direction.normalize().multiplyScalar(speed);
         }
 
-        // Set linear velocity directly for responsive movement
-        // Refactored to applyImpulse for physics consistency
-        if (direction.length() > 0) {
-            // Impulse-based movement
-            const force = 60; // Needs to be high enough to overcome damping/friction quickly
-            const impulse = direction.clone().normalize().multiplyScalar(force * 0.016); // Scale by approx frame time or just force
-            // Actually applyImpulse is instant force (N*s), so per frame it acts like acceleration
-            const frameImpulse = direction.clone().normalize().multiplyScalar(2); // Tune this value
-            body.current.applyImpulse({ x: frameImpulse.x, y: 0, z: frameImpulse.z }, true);
-        }
+        // Velocity-based smooth movement
+        const currentVel = body.current.linvel();
+        const lerpFactor = 10 * delta; // Snappy responsiveness
 
-        // We rely on linearDamping to stop the player
+        // We lerp the X and Z velocity to the target direction. 
+        // This naturally dampens knockbacks over time while keeping control tight.
+        const newX = MathUtils.lerp(currentVel.x, direction.x, lerpFactor);
+        const newZ = MathUtils.lerp(currentVel.z, direction.z, lerpFactor);
+
+        // Preserve Y velocity for gravity
+        body.current.setLinvel({ x: newX, y: currentVel.y, z: newZ }, true);
     });
 
     return (
@@ -157,20 +161,22 @@ export function Player() {
                 ref={body}
                 position={[0, 1, 0]}
                 enabledRotations={[false, false, false]} // Lock rotation so it doesn't roll
-                colliders="ball"
+                colliders={false}
                 friction={1}
-                linearDamping={10} // Stops creating slippery movement
+                linearDamping={0.5} // Allow smooth lerp to handle sliding
+                mass={100} // Very heavy player
                 userData={{ type: 'player' }}
             >
-                <mesh ref={mesh} name="player" castShadow receiveShadow>
-                    <sphereGeometry args={[0.7, 32, 32]} />
-                    <meshStandardMaterial color="cyan" />
-                    {/* Direction Indicator */}
-                    <mesh position={[0, 0, 0.8]}>
-                        <boxGeometry args={[0.2, 0.2, 0.5]} />
+                <CapsuleCollider args={[0.5, 0.3]} />
+                <group ref={mesh} name="player">
+                    {/* Scale and offset character so feet touch bottom of sphere */}
+                    <BonecoCompleto scale={0.008} position={[0, -0.8, 0]} bodyRef={body} isShootingRef={isShooting} />
+
+                    <mesh position={[0, 0, 0]}>
+                        <boxGeometry args={[0.1, 0.1, 0.2]} />
                         <meshStandardMaterial color="white" />
                     </mesh>
-                </mesh>
+                </group>
 
                 {/* Aim Logic Helper */}
                 <AimLogic body={body} mesh={mesh} />

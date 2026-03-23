@@ -3,7 +3,6 @@ import { useStore } from '../store';
 
 export function Cursor() {
     const [pos, setPos] = useState({ x: 0, y: 0 });
-    const isCameraDragging = useStore((state) => state.isCameraDragging);
     const [isVisible, setIsVisible] = useState(false); // Hide until first move to avoid (0,0) glitch
 
     useEffect(() => {
