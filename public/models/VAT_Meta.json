@@ -1,0 +1,72 @@
+{
+  "vertices": 16224,
+  "frames": 1181,
+  "fps": 30,
+  "animations": {
+    "mixamo.com": {
+      "start": 0,
+      "end": 1,
+      "duration": 0.03333333507180214
+    },
+    "zombie idle": {
+      "start": 2,
+      "end": 130,
+      "duration": 4.266666889190674
+    },
+    "zombie neck bite": {
+      "start": 131,
+      "end": 252,
+      "duration": 4.066666603088379
+    },
+    "zombie run": {
+      "start": 253,
+      "end": 277,
+      "duration": 0.800000011920929
+    },
+    "zombie scream": {
+      "start": 278,
+      "end": 361,
+      "duration": 2.799999952316284
+    },
+    "zombie walk": {
+      "start": 362,
+      "end": 482,
+      "duration": 4.0333333015441895
+    },
+    "running crawl": {
+      "start": 483,
+      "end": 501,
+      "duration": 0.6333333253860474
+    },
+    "zombie attack": {
+      "start": 502,
+      "end": 576,
+      "duration": 2.5
+    },
+    "zombie biting (2)": {
+      "start": 577,
+      "end": 645,
+      "duration": 2.299999952316284
+    },
+    "zombie biting": {
+      "start": 646,
+      "end": 843,
+      "duration": 6.599999904632568
+    },
+    "zombie crawl": {
+      "start": 844,
+      "end": 997,
+      "duration": 5.133333206176758
+    },
+    "zombie death": {
+      "start": 998,
+      "end": 1081,
+      "duration": 2.799999952316284
+    },
+    "zombie dying": {
+      "start": 1082,
+      "end": 1180,
+      "duration": 3.299999952316284
+    }
+  }
+}

@@ -1,14 +1,17 @@
+import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics, RigidBody } from '@react-three/rapier';
 import { useMemo } from 'react';
 import { CanvasTexture, RepeatWrapping, NearestFilter } from 'three';
-import { Player } from './components/Player';
-import { useStore } from './store';
-import { Projectile } from './components/Projectile';
-import { ProceduralLevel } from './components/ProceduralLevel';
-import { SimpleLevel } from './components/SimpleLevel';
-import { Cursor } from './components/Cursor';
-import { UI } from './components/UI';
+import { Player } from './entities/player/Player';
+import { useStore } from './core/store';
+import { ProceduralLevel } from './environments/ProceduralLevel';
+import { SimpleLevel } from './environments/SimpleLevel';
+import { Cursor } from './ui/Cursor';
+import { UI } from './ui/UI';
+import { LoadingScreen } from './ui/LoadingScreen';
+import { ProjectileManager } from './entities/projectiles/ProjectileManager';
+import { ZombieRenderer } from './entities/enemies/ZombieRenderer';
 
 function Ground() {
   const texture = useMemo(() => {
@@ -28,7 +31,7 @@ function Ground() {
     const tex = new CanvasTexture(canvas);
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
-    tex.repeat.set(1000, 1000);
+    tex.repeat.set(250, 250);
     tex.magFilter = NearestFilter;
     tex.minFilter = NearestFilter;
     return tex;
@@ -45,13 +48,11 @@ function Ground() {
 }
 
 export default function App() {
-  const projectiles = useStore((state) => state.projectiles);
-  // Memoize to avoid creating new array on every render
-  const projectileList = useMemo(() => Object.values(projectiles), [projectiles]);
   const currentLevel = useStore((state) => state.currentLevel);
 
   return (
     <>
+      <LoadingScreen />
       <Canvas shadows camera={{ position: [0, 15, 10], fov: 50 }}>
         <color attach="background" args={['#202030']} />
         <fog attach="fog" args={['#202030', 20, 180]} />
@@ -63,18 +64,18 @@ export default function App() {
           shadow-mapSize={[2048, 2048]}
         />
 
-        <Physics gravity={[0, -9.81, 0]}>
-          <Player />
+        <Suspense fallback={null}>
+          <Physics gravity={[0, -9.81, 0]}>
+            <Player />
 
-          {currentLevel === 'procedural' ? <ProceduralLevel /> : <SimpleLevel />}
-          <Ground />
+            {currentLevel === 'procedural' ? <ProceduralLevel /> : <SimpleLevel />}
+            <Ground />
 
-          {/* Projectiles */}
-          {projectileList.map((p) => (
-            <Projectile key={p.id} data={p} />
-          ))}
+            <ProjectileManager />
+            <ZombieRenderer />
 
-        </Physics>
+          </Physics>
+        </Suspense>
       </Canvas>
       <Cursor />
       <UI />
