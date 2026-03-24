@@ -10,8 +10,11 @@ import { SimpleLevel } from './environments/SimpleLevel';
 import { Cursor } from './ui/Cursor';
 import { UI } from './ui/UI';
 import { LoadingScreen } from './ui/LoadingScreen';
+import { EffectComposer, Pixelation } from '@react-three/postprocessing';
 import { ProjectileManager } from './entities/projectiles/ProjectileManager';
 import { ZombieRenderer } from './entities/enemies/ZombieRenderer';
+import { ParticleSystem } from './systems/ParticleSystem';
+import { AudioManagerInit } from './systems/AudioManager';
 
 function Ground() {
   const texture = useMemo(() => {
@@ -73,9 +76,16 @@ export default function App() {
 
             <ProjectileManager />
             <ZombieRenderer />
+            <ParticleSystem />
+            <AudioManagerInit />
 
           </Physics>
         </Suspense>
+
+        {/* Retro Pixel Art Filter */}
+        <EffectComposer>
+          <Pixelation granularity={3} />
+        </EffectComposer>
       </Canvas>
       <Cursor />
       <UI />

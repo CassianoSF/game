@@ -4,11 +4,12 @@ import * as THREE from 'three';
 import { Vector3, Raycaster, Plane, Quaternion, MathUtils } from 'three';
 import { useStore } from '../../core/store';
 import { RapierRigidBody } from '@react-three/rapier';
+import { audioAPI } from '../../systems/AudioManager';
 
-export function usePlayerController(
+export const usePlayerController = (
     bodyRef: React.RefObject<RapierRigidBody | null>,
     meshRef: React.RefObject<THREE.Group | THREE.Mesh | null>
-) {
+) => {
     const activeSlot = useStore((state) => state.activeSlot);
     const hotbar = useStore((state) => state.hotbar);
     const addProjectile = useStore((state) => state.addProjectile);
@@ -41,9 +42,39 @@ export function usePlayerController(
     const aimTarget = useMemo(() => new Vector3(), []);
 
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => (keys.current[e.key.toLowerCase()] = true);
-        const handleKeyUp = (e: KeyboardEvent) => (keys.current[e.key.toLowerCase()] = false);
-        const handleMouseDown = (e: MouseEvent) => { if (e.button === 0) isShooting.current = true; };
+        // Bloqueia preventivamente o fechamento direto por CTRL+W
+        const preventTabClose = (e: BeforeUnloadEvent) => {
+            if (keys.current['control']) {
+                e.preventDefault();
+                e.returnValue = ''; // Força o Chrome a mostrar a janela "Deseja mesmo sair?"
+            }
+        };
+        window.addEventListener('beforeunload', preventTabClose);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            keys.current[e.key.toLowerCase()] = true;
+            if (e.ctrlKey && ['w', 's', 'a', 'd'].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+            }
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            keys.current[e.key.toLowerCase()] = false;
+            if (e.ctrlKey && ['w', 's', 'a', 'd'].includes(e.key.toLowerCase())) {
+                e.preventDefault();
+            }
+        };
+        const handleMouseDown = async (e: MouseEvent) => { 
+            if (e.button === 0) isShooting.current = true; 
+            
+            // First interaction universally fires background music (Browser Policies)
+            audioAPI.playBGM('sounds/theme05.ogg');
+
+            // Ativa o "Modo Gamer" avançado bloqueando as teclas críticas no navegador
+            if ('keyboard' in navigator && (navigator as any).keyboard.lock) {
+                try {
+                    await (navigator as any).keyboard.lock(['ControlLeft', 'ControlRight', 'KeyW']);
+                } catch (err) {}
+            }
+        };
         const handleMouseUp = (e: MouseEvent) => { if (e.button === 0) isShooting.current = false; };
 
         window.addEventListener('keydown', handleKeyDown);
@@ -70,6 +101,16 @@ export function usePlayerController(
         meshRef.current.getWorldQuaternion(quaternion);
 
         const offset = 0.4;
+
+        if (equippedWeapon.type === 'machine_gun') {
+            const rifleSounds = ['sounds/machine_gun/rifle.ogg', 'sounds/machine_gun/rifle2.ogg', 'sounds/machine_gun/rifle3.ogg'];
+            const randomSound = rifleSounds[Math.floor(Math.random() * rifleSounds.length)];
+            audioAPI.play2D(randomSound, 0.6);
+        } else if (equippedWeapon.type === 'shotgun') {
+            const shotgunSounds = ['sounds/shotgun/shotgun.ogg', 'sounds/shotgun/shotgun2.ogg', 'sounds/shotgun/shotgun3.ogg'];
+            const randomSound = shotgunSounds[Math.floor(Math.random() * shotgunSounds.length)];
+            audioAPI.play2D(randomSound, 0.7);
+        } else if (equippedWeapon.type === 'pistol') audioAPI.play2D('sounds/pistol_shot.ogg', 0.5);
 
         for (let i = 0; i < equippedWeapon.stats.projectiles; i++) {
             const spreadAngle = (Math.random() - 0.5) * equippedWeapon.stats.spread;

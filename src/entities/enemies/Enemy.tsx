@@ -24,6 +24,18 @@ export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
         return () => zombieRendererAPI.unregister(slot);
     }, [slot]);
 
+    // Forceful Rust WASM collision disconnect
+    useEffect(() => {
+        if (isDead && body.current) {
+            // Apply group changes to all child colliders, as RigidBodies themselves don't hold collision groups
+            const numColliders = body.current.numColliders();
+            for (let i = 0; i < numColliders; i++) {
+                const collider = body.current.collider(i);
+                if (collider) collider.setCollisionGroups(interactionGroups(3, []));
+            }
+        }
+    }, [isDead]);
+
     useFrame((_ctx, delta) => {
         if (!zombieRendererAPI.instancedMesh || !zombieRendererAPI.frameAttribute || !meshRef.current) return;
 
@@ -76,9 +88,7 @@ export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
             position={data.position}
             enabledTranslations={[!isDead, !isDead, !isDead]} // Freeze in place when dead
             colliders={false}
-            collisionGroups={isDead
-                ? interactionGroups(3, [0])
-                : interactionGroups(1, [0, 1, 2])}
+            collisionGroups={interactionGroups(1, [0, 1, 2])}
             lockRotations
             friction={1}
             restitution={0}
