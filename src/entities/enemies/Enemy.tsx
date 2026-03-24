@@ -6,6 +6,9 @@ import { useEnemyAI } from './useEnemyAI';
 import { zombieRendererAPI } from './ZombieRenderer';
 import { useFrame } from '@react-three/fiber';
 import meta from '../../../public/models/VAT_Meta.json';
+import type { VATAnimation } from '../../core/config/VATConfig';
+import { ZOMBIE_ANIMATIONS } from '../../core/config/VATConfig';
+import type { EnemyState } from './useEnemyAI';
 
 export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
     const body = useRef<RapierRigidBody | null>(null);
@@ -45,23 +48,14 @@ export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
         zombieRendererAPI.instancedMesh.instanceMatrix.needsUpdate = true;
 
         // 2. Sync VAT Animation Frame
-        const currentState = isDead ? 'DEAD' : state;
+        const currentState = (isDead ? 'DEAD' : state) as EnemyState;
         if (prevState.current !== currentState) {
             animTimer.current = 0;
             prevState.current = currentState;
         }
 
-        let animName = 'zombie idle';
-        switch (currentState) {
-            case 'IDLE': animName = 'zombie idle'; break;
-            case 'WANDER':
-            case 'INVESTIGATE': animName = 'zombie walk'; break;
-            case 'CHASE': animName = 'zombie run'; break;
-            case 'ATTACK': animName = 'zombie attack'; break;
-            case 'DEAD': animName = 'zombie death'; break;
-        }
-
-        const animData = (meta.animations as any)[animName];
+        const animName = ZOMBIE_ANIMATIONS[currentState];
+        const animData = (meta.animations as Record<string, VATAnimation>)[animName!];
         if (animData) {
             animTimer.current += delta;
             let time = animTimer.current;

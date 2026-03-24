@@ -9,6 +9,7 @@ import { useFrame } from '@react-three/fiber'
 import { useGLTF, useAnimations } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
 import { RapierRigidBody } from '@react-three/rapier'
+import { M4A1 } from './M4A1'
 
 type ActionName =
   | 'mixamo.com'
@@ -75,28 +76,56 @@ type BonecoProps = React.ComponentProps<'group'> & {
 export function BonecoCompleto({ bodyRef, isShootingRef, moveStateRef, ...props }: BonecoProps) {
   const group = useRef<THREE.Group>(null)
   const { scene, animations } = useGLTF('/models/Player.glb')
-  
+
   // Mixamo Root Motion Fix ("In Place" hook)
   const inPlaceAnimations = React.useMemo(() => {
     return animations.map(clip => {
       const clonedClip = clip.clone();
       clonedClip.tracks.forEach(track => {
-         // Check for the main hip translation track
-         if (track.name.match(/mixamorigHips\.position/i)) {
-            // track.values is a flat array [X, Y, Z, X, Y, Z, ...]
-            for (let i = 0; i < track.values.length; i += 3) {
-               // Zero out X and Z (Forward/Lateral movement)
-               track.values[i] = 0;     
-               // Keep Y (track.values[i + 1]) for bounce/bobbing
-               track.values[i + 2] = 0; 
-            }
-         }
+        // Check for the main hip translation track
+        if (track.name.match(/mixamorigHips\.position/i)) {
+          // track.values is a flat array [X, Y, Z, X, Y, Z, ...]
+          for (let i = 0; i < track.values.length; i += 3) {
+            // Zero out X and Z (Forward/Lateral movement)
+            track.values[i] = 0;
+            // Keep Y (track.values[i + 1]) for bounce/bobbing
+            track.values[i + 2] = 0;
+          }
+        }
       });
       return clonedClip;
     });
   }, [animations]);
 
-  const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene])
+  const clone = React.useMemo(() => {
+    const clonedScene = SkeletonUtils.clone(scene);
+    clonedScene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    return clonedScene;
+  }, [scene]);
+
+  const weaponGroupRef = useRef<THREE.Group>(null);
+  const rightHandBone = React.useMemo(() => {
+    let handBone: THREE.Bone | null = null;
+    clone.traverse((child) => {
+      if (child instanceof THREE.Bone && child.name === 'mixamorigRightHand') {
+        handBone = child;
+      }
+    });
+    return handBone;
+  }, [clone]);
+
+  React.useEffect(() => {
+    if (rightHandBone && weaponGroupRef.current) {
+      const bone = rightHandBone as THREE.Bone;
+      bone.add(weaponGroupRef.current);
+    }
+  }, [rightHandBone]);
+
   const { actions } = useAnimations(inPlaceAnimations, group)
 
   const currentAction = useRef<ActionName>('idle');
@@ -109,84 +138,89 @@ export function BonecoCompleto({ bodyRef, isShootingRef, moveStateRef, ...props 
   // Handle animation transitions without triggering React renders
   useFrame(() => {
     let nextAction: ActionName = 'idle';
-    
+
     // Check velocity
     if (bodyRef.current && group.current) {
-        const velocity = bodyRef.current.linvel();
-        const speed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2);
-        
-        if (speed > 0.5) { // Lowered detection threshold for slower walk cycles
-            // Convert world velocity to local velocity to know which way we are strafing relative to where we are aiming
-            const localVel = new THREE.Vector3(velocity.x, 0, velocity.z);
-            const quaternion = new THREE.Quaternion();
-            group.current.getWorldQuaternion(quaternion);
-            quaternion.invert();
-            localVel.applyQuaternion(quaternion);
+      const velocity = bodyRef.current.linvel();
+      const speed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2);
 
-            // In our setup, Z+ is forward due to the way lookAt is configured in Player.tsx
-            const fwd = localVel.z;
-            const right = -localVel.x; // ThreeJS standard: X- is right if Z+ is forward
+      if (speed > 0.5) { // Lowered detection threshold for slower walk cycles
+        // Convert world velocity to local velocity to know which way we are strafing relative to where we are aiming
+        const localVel = new THREE.Vector3(velocity.x, 0, velocity.z);
+        const quaternion = new THREE.Quaternion();
+        group.current.getWorldQuaternion(quaternion);
+        quaternion.invert();
+        localVel.applyQuaternion(quaternion);
 
-            const threshold = speed * 0.4; // Diagonal threshold
-            
-            const state = moveStateRef.current || 'run';
-            if (state === 'roll') {
-                nextAction = 'Sprinting Forward Roll';
-            } else {
-                let prefix: string = state;
-                if (state === 'crouch') prefix = 'walk crouching';
+        // In our setup, Z+ is forward due to the way lookAt is configured in Player.tsx
+        const fwd = localVel.z;
+        const right = -localVel.x; // ThreeJS standard: X- is right if Z+ is forward
 
-                if (fwd > threshold && right > threshold) nextAction = `${prefix} forward right` as ActionName;
-                else if (fwd > threshold && right < -threshold) nextAction = `${prefix} forward left` as ActionName;
-                else if (fwd < -threshold && right > threshold) nextAction = `${prefix} backward right` as ActionName;
-                else if (fwd < -threshold && right < -threshold) nextAction = `${prefix} backward left` as ActionName;
-                else if (fwd > threshold) nextAction = `${prefix} forward` as ActionName;
-                else if (fwd < -threshold) nextAction = `${prefix} backward` as ActionName;
-                else if (right > threshold) nextAction = `${prefix} right` as ActionName;
-                else if (right < -threshold) nextAction = `${prefix} left` as ActionName;
-                else nextAction = `${prefix} forward` as ActionName; // fallback
-            }
+        const threshold = speed * 0.4; // Diagonal threshold
+
+        const state = moveStateRef.current || 'run';
+        if (state === 'roll') {
+          nextAction = 'Sprinting Forward Roll';
         } else {
-            // Idle State
-            const state = moveStateRef.current || 'run';
-            if (state === 'roll') {
-                nextAction = 'Sprinting Forward Roll';
-            } else if (state === 'crouch') {
-                nextAction = 'idle crouching';
-            } else {
-                nextAction = 'idle';
-            }
+          let prefix: string = state;
+          if (state === 'crouch') prefix = 'walk crouching';
 
-            // Check shooting overrides
-            if (isShootingRef.current) {
-                if (moveStateRef.current === 'crouch') nextAction = 'idle crouching aiming';
-                else nextAction = 'idle aiming';
-            }
+          if (fwd > threshold && right > threshold) nextAction = `${prefix} forward right` as ActionName;
+          else if (fwd > threshold && right < -threshold) nextAction = `${prefix} forward left` as ActionName;
+          else if (fwd < -threshold && right > threshold) nextAction = `${prefix} backward right` as ActionName;
+          else if (fwd < -threshold && right < -threshold) nextAction = `${prefix} backward left` as ActionName;
+          else if (fwd > threshold) nextAction = `${prefix} forward` as ActionName;
+          else if (fwd < -threshold) nextAction = `${prefix} backward` as ActionName;
+          else if (right > threshold) nextAction = `${prefix} right` as ActionName;
+          else if (right < -threshold) nextAction = `${prefix} left` as ActionName;
+          else nextAction = `${prefix} forward` as ActionName; // fallback
         }
+      } else {
+        // Idle State
+        const state = moveStateRef.current || 'run';
+        if (state === 'roll') {
+          nextAction = 'Sprinting Forward Roll';
+        } else if (state === 'crouch') {
+          nextAction = 'idle crouching';
+        } else {
+          nextAction = 'idle';
+        }
+
+        // Check shooting overrides
+        if (isShootingRef.current) {
+          if (moveStateRef.current === 'crouch') nextAction = 'idle crouching aiming';
+          else nextAction = 'idle aiming';
+        }
+      }
     }
 
     // Transition if changed
     if (nextAction !== currentAction.current) {
-        actions[currentAction.current]?.fadeOut(0.2);
-        const action = actions[nextAction];
-        if (action) {
-            action.reset().fadeIn(0.2).play();
-            if (nextAction === 'Sprinting Forward Roll') {
-                action.setLoop(THREE.LoopOnce, 1);
-                action.clampWhenFinished = true;
-                action.setEffectiveTimeScale(1.6); // 60% faster
-            } else {
-                action.setLoop(THREE.LoopRepeat, Infinity);
-                action.setEffectiveTimeScale(1.0); // Reset to normal
-            }
+      actions[currentAction.current]?.fadeOut(0.2);
+      const action = actions[nextAction];
+      if (action) {
+        action.reset().fadeIn(0.2).play();
+        if (nextAction === 'Sprinting Forward Roll') {
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          action.setEffectiveTimeScale(1.6); // 60% faster
+        } else {
+          action.setLoop(THREE.LoopRepeat, Infinity);
+          action.setEffectiveTimeScale(1.0); // Reset to normal
         }
-        currentAction.current = nextAction;
+      }
+      currentAction.current = nextAction;
     }
   });
 
   return (
     <group ref={group} {...props} dispose={null}>
       <primitive object={clone} />
+      {rightHandBone && (
+        <group ref={weaponGroupRef}>
+          <M4A1 />
+        </group>
+      )}
     </group>
   )
 }

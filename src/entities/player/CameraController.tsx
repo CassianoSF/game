@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import type { RefObject } from 'react';
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../core/store';
 
 interface CameraControllerProps {
@@ -17,16 +17,14 @@ export function CameraController({ target }: CameraControllerProps) {
     const MIN_DISTANCE = 10;
     const MAX_DISTANCE = 20;
 
-    const MIN_PITCH = 0.4;
-    const MAX_PITCH = 1.5;
+    const MIN_PITCH = 0.6;
+    const MAX_PITCH = 1.1;
 
-    const isDragging = useRef(false);
     const desiredPosition = useMemo(() => new Vector3(), []);
 
     useEffect(() => {
         const onPointerLockChange = () => {
             const isLocked = document.pointerLockElement === document.body;
-            isDragging.current = isLocked;
             setCameraDragging(isLocked);
         };
 
@@ -43,7 +41,7 @@ export function CameraController({ target }: CameraControllerProps) {
         };
 
         const handleMouseMove = (e: MouseEvent) => {
-            if (isDragging.current) {
+            if (document.pointerLockElement === document.body) {
                 const deltaX = e.movementX;
                 const deltaY = e.movementY;
 

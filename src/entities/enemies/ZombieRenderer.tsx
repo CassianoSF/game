@@ -59,27 +59,27 @@ export function ZombieRenderer() {
     }), [vatTexture]);
 
     // Find the actual mesh inside the GLTF
-    const staticMesh = useMemo(() => {
+    const staticMesh = useMemo<THREE.Mesh | null>(() => {
         let found: THREE.Mesh | null = null;
-        scene.traverse((child: any) => {
-            if (child.isMesh && !found) found = child;
+        scene.traverse((child) => {
+            if (child instanceof THREE.Mesh && !found) found = child;
         });
-        return found as unknown as THREE.Mesh;
+        return found;
     }, [scene]);
 
     const geometry = useMemo(() => {
         if (!staticMesh) return null;
-        const geo = staticMesh.geometry.clone();
-        return geo;
+        return staticMesh.geometry.clone();
     }, [staticMesh]);
 
     const frameArray = useMemo(() => new Float32Array(MAX_ZOMBIES), []);
 
     const material = useMemo(() => {
         if (!staticMesh || !vatTexture) return null;
-        const mat = (staticMesh.material as THREE.Material).clone();
-        
-        mat.onBeforeCompile = (shader) => {
+        const mat = Array.isArray(staticMesh.material) ? staticMesh.material[0] : staticMesh.material;
+        const matClone = mat.clone() as THREE.Material;
+
+        matClone.onBeforeCompile = (shader) => {
             shader.uniforms.vatTexture = uniformsData.vatTexture;
             shader.uniforms.numFrames = uniformsData.numFrames;
 
@@ -98,17 +98,47 @@ export function ZombieRenderer() {
                 `#include <begin_vertex>`,
                 `
                 // Read VAT Pixel
-                float u = uv2.x; // Set by our exporter
-                // Restore regular instance frame
-                float v = (aFrame + 0.5) / numFrames; 
+                float u = uv2.x;
+                float v = (aFrame + 0.5) / numFrames;
                 vec4 texPos = texture2D(vatTexture, vec2(u, v));
-                
                 vec3 transformed = texPos.xyz;
                 `
             );
         };
-        return mat;
+        return matClone;
     }, [staticMesh, vatTexture, uniformsData]);
+
+    const customDepthMaterial = useMemo(() => {
+        if (!vatTexture) return null;
+        const depthMat = new THREE.MeshDepthMaterial();
+        depthMat.onBeforeCompile = (shader) => {
+            shader.uniforms.vatTexture = uniformsData.vatTexture;
+            shader.uniforms.numFrames = uniformsData.numFrames;
+
+            shader.vertexShader = shader.vertexShader.replace(
+                `#include <common>`,
+                `
+                #include <common>
+                uniform sampler2D vatTexture;
+                uniform float numFrames;
+                attribute float aFrame;
+                #ifndef USE_UV2
+                  attribute vec2 uv2;
+                #endif
+                `
+            ).replace(
+                `#include <begin_vertex>`,
+                `
+                // Read VAT Pixel
+                float u = uv2.x;
+                float v = (aFrame + 0.5) / numFrames;
+                vec4 texPos = texture2D(vatTexture, vec2(u, v));
+                vec3 transformed = texPos.xyz;
+                `
+            );
+        };
+        return depthMat;
+    }, [vatTexture, uniformsData]);
 
     const instancedMeshRef = useRef<THREE.InstancedMesh>(null);
     const frameAttributeRef = useRef<THREE.InstancedBufferAttribute>(null);
@@ -132,7 +162,10 @@ export function ZombieRenderer() {
         <instancedMesh
             ref={instancedMeshRef}
             args={[geometry, material, MAX_ZOMBIES]}
+            customDepthMaterial={customDepthMaterial || undefined}
             frustumCulled={false} // VAT modifies bounds, best to disable frustum culling
+            castShadow
+            receiveShadow
         >
             <instancedBufferAttribute 
                 ref={frameAttributeRef}

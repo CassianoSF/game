@@ -1,27 +1,14 @@
 import { useStore } from '../core/store';
+import { useInventoryDragDrop } from './hooks/useInventoryDragDrop';
 
 export function Inventory({ onClose }: { onClose: () => void }) {
     const inventory = useStore((state) => state.inventory);
     const moveItem = useStore((state) => state.moveItem);
 
-    const handleDragStart = (e: React.DragEvent, slot: number) => {
-        e.dataTransfer.setData('fromContainer', 'inventory');
-        e.dataTransfer.setData('fromSlot', slot.toString());
-    };
-
-    const handleDrop = (e: React.DragEvent, slot: number) => {
-        e.preventDefault();
-        const fromContainer = e.dataTransfer.getData('fromContainer') as 'inventory' | 'hotbar';
-        const fromSlot = parseInt(e.dataTransfer.getData('fromSlot'));
-
-        if (fromContainer && !isNaN(fromSlot)) {
-            moveItem(fromContainer, fromSlot, 'inventory', slot);
-        }
-    };
-
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-    };
+    const { handleDragStart, handleDrop, handleDragOver } = useInventoryDragDrop({
+        container: 'inventory',
+        moveItem,
+    });
 
     return (
         <div style={{
@@ -69,7 +56,14 @@ export function Inventory({ onClose }: { onClose: () => void }) {
                     >
                         {item && (
                             <>
-                                <div style={{ width: '20px', height: '20px', background: item.stats.color, borderRadius: '50%', marginBottom: '5px' }} />
+                                <div style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    background: item.stats.color,
+                                    borderRadius: '50%',
+                                    marginBottom: '5px',
+                                    color: 'gray',
+                                }} />
                                 {item.name}
                             </>
                         )}

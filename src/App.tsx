@@ -61,10 +61,16 @@ export default function App() {
         <fog attach="fog" args={['#202030', 20, 180]} />
         <ambientLight intensity={1.5} />
         <directionalLight
-          position={[50, 50, 25]}
+          position={[50, 100, 25]}
           intensity={2}
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[4096, 4096]}
+          shadow-camera-near={0.5}
+          shadow-camera-far={500}
+          shadow-camera-left={-200}
+          shadow-camera-right={200}
+          shadow-camera-top={200}
+          shadow-camera-bottom={-200}
         />
 
         <Suspense fallback={null}>

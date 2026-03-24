@@ -23,6 +23,11 @@ export function useEnemyAI(
     const wanderTarget = useRef<Vector3 | null>(null);
     const stateTimer = useRef(0);
     const deathAnimationFinished = useRef(false);
+    // Attack sync: mirrors the 'zombie attack' VAT animation (duration: 2.5s)
+    const ATTACK_ANIM_DURATION = 2.5;   // seconds — must match VAT_Meta.json
+    const ATTACK_HIT_POINT = 1.25;  // when in the cycle damage is applied (~70%)
+    const attackCycleTime = useRef(ATTACK_ANIM_DURATION); // start at end so first cycle begins immediately
+    const attackHitDealt = useRef(false); // ensure only one hit per cycle
 
     // Stats
     const sightRange = 15;
@@ -42,11 +47,12 @@ export function useEnemyAI(
     const myVec = useMemo(() => new Vector3(), []);
     const playerPos = useMemo(() => new Vector3(), []);
     const dirToPlayer = useMemo(() => new Vector3(), []);
-    const tempRaycaster = useMemo(() => new Raycaster(), []);
     const desiredVelocity = useMemo(() => new Vector3(), []);
 
     useFrame((_stateCtx, delta) => {
         if (!bodyRef.current) return;
+
+        const tempRaycaster = new Raycaster();
 
         if (isDead) {
             if (!deathAnimationFinished.current) {
@@ -73,6 +79,8 @@ export function useEnemyAI(
                 tempRaycaster.set(myVec, dirToPlayer);
                 tempRaycaster.far = sightRange;
                 canSeePlayer = true;
+            } else {
+                tempRaycaster.far = 0;
             }
 
             // Hearing Check 
@@ -82,7 +90,7 @@ export function useEnemyAI(
 
             if (canSeePlayer) {
                 lastKnownPos.current = playerPos.clone();
-                stateTimer.current = memoryDuration; 
+                stateTimer.current = memoryDuration;
             }
         }
 
@@ -119,10 +127,10 @@ export function useEnemyAI(
 
             case 'CHASE':
                 if (!canSeePlayer) {
-                    setState('INVESTIGATE'); 
+                    setState('INVESTIGATE');
                 } else {
                     const dist = myVec.distanceTo(playerPos);
-                    if (dist < 2) setState('ATTACK');
+                    if (dist < 1.2) setState('ATTACK');
                 }
                 break;
 
@@ -130,7 +138,7 @@ export function useEnemyAI(
                 if (!canSeePlayer) setState('INVESTIGATE');
                 else {
                     const dist = myVec.distanceTo(playerPos);
-                    if (dist > 3) setState('CHASE');
+                    if (dist > 1.8) setState('CHASE');
                 }
                 break;
 
@@ -151,6 +159,27 @@ export function useEnemyAI(
                 break;
         }
 
+        // --- ATTACK DAMAGE (synced to animation cycle) ---
+        if (state === 'ATTACK') {
+            attackCycleTime.current += delta;
+
+            // New cycle starts
+            if (attackCycleTime.current >= ATTACK_ANIM_DURATION) {
+                attackCycleTime.current = 0;
+                attackHitDealt.current = false;
+            }
+
+            // Apply damage at the hit frame, once per cycle
+            if (!attackHitDealt.current && attackCycleTime.current >= ATTACK_HIT_POINT) {
+                attackHitDealt.current = true;
+                useStore.getState().damagePlayer(10);
+            }
+        } else {
+            // Reset cycle when not attacking so next ATTACK starts fresh
+            attackCycleTime.current = ATTACK_ANIM_DURATION;
+            attackHitDealt.current = false;
+        }
+
         // --- MOVEMENT ---
         const stunTime = useStore.getState().stunnedEnemies[data.id];
         if (stunTime && stunTime > Date.now()) {
@@ -158,10 +187,10 @@ export function useEnemyAI(
         }
 
         desiredVelocity.set(0, 0, 0);
-        let speed = 2; 
+        let speed = 2;
 
         if (state === 'CHASE' && lastKnownPos.current) {
-            speed = 6; 
+            speed = 6;
             desiredVelocity.subVectors(lastKnownPos.current, myVec).normalize().multiplyScalar(speed);
         } else if (state === 'ATTACK') {
             desiredVelocity.set(0, 0, 0);
