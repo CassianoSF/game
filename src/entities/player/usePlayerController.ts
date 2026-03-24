@@ -21,8 +21,9 @@ export const usePlayerController = (
     const keys = useRef<{ [key: string]: boolean }>({});
     const isShooting = useRef(false);
     const lastShootTime = useRef(0);
+    const lastFootstepTime = useRef(0);
     const moveState = useRef<'run' | 'sprint' | 'walk' | 'crouch' | 'roll'>('run');
-    
+
     // Roll System
     const isRolling = useRef(false);
     const rollStartTime = useRef(0);
@@ -62,17 +63,17 @@ export const usePlayerController = (
                 e.preventDefault();
             }
         };
-        const handleMouseDown = async (e: MouseEvent) => { 
-            if (e.button === 0) isShooting.current = true; 
-            
+        const handleMouseDown = async (e: MouseEvent) => {
+            if (e.button === 0) isShooting.current = true;
+
             // First interaction universally fires background music (Browser Policies)
-            audioAPI.playBGM('sounds/theme05.ogg');
+            // audioAPI.playBGM('sounds/theme05.ogg');
 
             // Ativa o "Modo Gamer" avançado bloqueando as teclas críticas no navegador
             if ('keyboard' in navigator && (navigator as any).keyboard.lock) {
                 try {
                     await (navigator as any).keyboard.lock(['ControlLeft', 'ControlRight', 'KeyW']);
-                } catch (err) {}
+                } catch (err) { }
             }
         };
         const handleMouseUp = (e: MouseEvent) => { if (e.button === 0) isShooting.current = false; };
@@ -96,21 +97,21 @@ export const usePlayerController = (
         const position = bodyRef.current.translation();
         const fireDir = new Vector3();
         const quaternion = new Quaternion();
-        
+
         meshRef.current.getWorldDirection(fireDir);
         meshRef.current.getWorldQuaternion(quaternion);
 
-        const offset = 0.4;
+        const offset = 1.0;
 
         if (equippedWeapon.type === 'machine_gun') {
             const rifleSounds = ['sounds/machine_gun/rifle.ogg', 'sounds/machine_gun/rifle2.ogg', 'sounds/machine_gun/rifle3.ogg'];
             const randomSound = rifleSounds[Math.floor(Math.random() * rifleSounds.length)];
-            audioAPI.play2D(randomSound, 0.6);
+            audioAPI.play2D(randomSound, 0.2);
         } else if (equippedWeapon.type === 'shotgun') {
             const shotgunSounds = ['sounds/shotgun/shotgun.ogg', 'sounds/shotgun/shotgun2.ogg', 'sounds/shotgun/shotgun3.ogg'];
             const randomSound = shotgunSounds[Math.floor(Math.random() * shotgunSounds.length)];
-            audioAPI.play2D(randomSound, 0.7);
-        } else if (equippedWeapon.type === 'pistol') audioAPI.play2D('sounds/pistol_shot.ogg', 0.5);
+            audioAPI.play2D(randomSound, 0.35);
+        } else if (equippedWeapon.type === 'pistol') audioAPI.play2D('sounds/pistol_shot.ogg', 0.7);
 
         for (let i = 0; i < equippedWeapon.stats.projectiles; i++) {
             const spreadAngle = (Math.random() - 0.5) * equippedWeapon.stats.spread;
@@ -170,10 +171,10 @@ export const usePlayerController = (
             speed = 2.5;
             moveState.current = 'walk';
         } else if (keys.current['shift']) {
-            speed = 8;
+            speed = 7;
             moveState.current = 'sprint';
         } else {
-            speed = 5;
+            speed = 5.5;
             moveState.current = 'run';
         }
 
@@ -228,6 +229,54 @@ export const usePlayerController = (
         const newZ = MathUtils.lerp(currentVel.z, direction.z, lerpFactor);
 
         bodyRef.current.setLinvel({ x: newX, y: currentVel.y, z: newZ }, true);
+
+        // --- 6. Footsteps Logic ---
+        const isMoving = direction.length() > 0.1;
+
+        if (isMoving) {
+            let footstepInterval: number;
+
+            switch (moveState.current) {
+                case 'crouch':
+                    footstepInterval = 0.6;
+                    break;
+                case 'walk':
+                    footstepInterval = 0.55;
+                    break;
+                case 'run':
+                    footstepInterval = 0.27;
+                    break;
+                case 'sprint':
+                    footstepInterval = 0.25;
+                    break;
+                case 'roll':
+                    footstepInterval = 0.25;
+                    break;
+                default:
+                    footstepInterval = 0.4;
+            }
+
+            if (state.clock.elapsedTime - lastFootstepTime.current > footstepInterval) {
+                const footstepSounds = [
+                    'sounds/footsteps/Footstep_Dirt_00.mp3',
+                    'sounds/footsteps/Footstep_Dirt_01.mp3',
+                    'sounds/footsteps/Footstep_Dirt_02.mp3',
+                    'sounds/footsteps/Footstep_Dirt_03.mp3',
+                    'sounds/footsteps/Footstep_Dirt_04.mp3',
+                    'sounds/footsteps/Footstep_Dirt_05.mp3',
+                    'sounds/footsteps/Footstep_Dirt_06.mp3',
+                    'sounds/footsteps/Footstep_Dirt_07.mp3',
+                    'sounds/footsteps/Footstep_Dirt_08.mp3',
+                    'sounds/footsteps/Footstep_Dirt_09.mp3'
+                ];
+
+                const randomFootstep = footstepSounds[Math.floor(Math.random() * footstepSounds.length)];
+                const playerPos = bodyRef.current.translation();
+                audioAPI.play3D(randomFootstep, { x: playerPos.x, y: 0, z: playerPos.z }, 10.);
+
+                lastFootstepTime.current = state.clock.elapsedTime;
+            }
+        }
     });
 
     return { moveState, isShooting };

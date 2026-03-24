@@ -43,12 +43,12 @@ export const Projectile = memo(({ data }: { data: any }) => {
 
             if (isEnemy) {
                 hitEnemy(entityId, data.stats.damage, 300);
-                const pos = bodyRef.current?.translation() as any || {x: data.position[0], y: data.position[1], z: data.position[2]};
+                const pos = bodyRef.current?.translation() as any || { x: data.position[0], y: data.position[1], z: data.position[2] };
                 particleAPI.emit(pos, 'blood', 15);
                 const rndHit = Math.floor(Math.random() * 4); // 0 to 3
-                audioAPI.play3D(`sounds/zombie_hit/${rndHit}.wav`, pos, 1.0);
+                audioAPI.play3D(`sounds/zombie_hit/${rndHit}.wav`, pos, 20.0);
             } else {
-                particleAPI.emit(bodyRef.current?.translation() as any || {x: data.position[0], y: data.position[1], z: data.position[2]}, 'spark', 15);
+                particleAPI.emit(bodyRef.current?.translation() as any || { x: data.position[0], y: data.position[1], z: data.position[2] }, 'spark', 15);
             }
 
             const hitBody = payload.other.rigidBody;
@@ -59,7 +59,7 @@ export const Projectile = memo(({ data }: { data: any }) => {
                 hitBody.applyImpulse({ x: impulse.x, y: 0, z: impulse.z }, true);
             }
         }
-        
+
         // Destroy the projectile immediately upon hitting ANY physical object (Floor, Wall, Enemy)
         removeProjectile(data.id);
     };

@@ -12,6 +12,16 @@ export const ASSET_LIST = [
     'sounds/shotgun/shotgun.ogg',
     'sounds/shotgun/shotgun2.ogg',
     'sounds/shotgun/shotgun3.ogg',
+    'sounds/footsteps/Footstep_Dirt_00.mp3',
+    'sounds/footsteps/Footstep_Dirt_01.mp3',
+    'sounds/footsteps/Footstep_Dirt_02.mp3',
+    'sounds/footsteps/Footstep_Dirt_03.mp3',
+    'sounds/footsteps/Footstep_Dirt_04.mp3',
+    'sounds/footsteps/Footstep_Dirt_05.mp3',
+    'sounds/footsteps/Footstep_Dirt_06.mp3',
+    'sounds/footsteps/Footstep_Dirt_07.mp3',
+    'sounds/footsteps/Footstep_Dirt_08.mp3',
+    'sounds/footsteps/Footstep_Dirt_09.mp3',
     'sounds/zombie_hit/0.wav',
     'sounds/zombie_hit/1.wav',
     'sounds/zombie_hit/2.wav',
@@ -44,7 +54,7 @@ export const audioAPI = {
         if (audioAPI.positionalEmitters.length > 0) return; // Already initialized
 
         // Create a pool of 30 3D positional emitters
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 200; i++) {
             const emitter = new THREE.PositionalAudio(audioAPI.listener);
             emitter.setRefDistance(3);
             emitter.setMaxDistance(40);
@@ -54,10 +64,10 @@ export const audioAPI = {
         }
 
         // Create a pool of 15 2D global emitters (For gunshots, UI)
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 200; i++) {
             audioAPI.globalEmitters.push(new THREE.Audio(audioAPI.listener));
         }
-        
+
         audioAPI.bgmElement = new THREE.Audio(audioAPI.listener);
         audioAPI.bgmElement.setLoop(true);
         audioAPI.bgmElement.setVolume(0.2);
@@ -66,13 +76,13 @@ export const audioAPI = {
     play2D: (url: string, volume = 0.5) => {
         const emitter = audioAPI.globalEmitters.find(e => !e.isPlaying);
         if (!emitter || !audioAPI.bufferCache.has(url)) return;
-        
+
         emitter.setBuffer(audioAPI.bufferCache.get(url)!);
         emitter.setVolume(volume);
         emitter.play();
     },
 
-    play3D: (url: string, position: THREE.Vector3 | {x: number, y: number, z: number}, volume = 1.0) => {
+    play3D: (url: string, position: THREE.Vector3 | { x: number, y: number, z: number }, volume = 1.0) => {
         const emitter = audioAPI.positionalEmitters.find(e => !e.isPlaying);
         if (!emitter || !audioAPI.bufferCache.has(url)) return;
 
@@ -85,9 +95,9 @@ export const audioAPI = {
     playBGM: (url: string) => {
         if (!audioAPI.bgmElement || !audioAPI.bufferCache.has(url)) return;
         if (audioAPI.currentBGM === url && audioAPI.bgmElement.isPlaying) return;
-        
+
         if (audioAPI.bgmElement.isPlaying) audioAPI.bgmElement.stop();
-        
+
         audioAPI.currentBGM = url;
         audioAPI.bgmElement.setBuffer(audioAPI.bufferCache.get(url)!);
         audioAPI.bgmElement.play();
@@ -96,11 +106,11 @@ export const audioAPI = {
 
 export function AudioManagerInit() {
     const { scene, camera } = useThree();
-    
+
     // This hook universally blocks the <Suspense> component (and powers LoadingScreen.tsx)
     // until every byte of these audio arrays is downloaded into browser memory caching
     const buffers = useLoader(THREE.AudioLoader, ASSET_LIST.map(a => `/${a}`));
-    
+
     useEffect(() => {
         ASSET_LIST.forEach((url, i) => {
             audioAPI.bufferCache.set(url, buffers[i]);
@@ -108,7 +118,7 @@ export function AudioManagerInit() {
 
         camera.add(audioAPI.listener);
         audioAPI.init(scene);
-        
+
         return () => {
             camera.remove(audioAPI.listener);
             audioAPI.positionalEmitters.forEach(e => {
