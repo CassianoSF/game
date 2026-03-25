@@ -35,6 +35,16 @@ export const ASSET_LIST = [
     'sounds/zombie_sound/3.mp3',
     'sounds/zombie_sound/4.mp3',
     'sounds/zombie_sound/5.mp3',
+    'sounds/survivor_yell/3yell0.wav',
+    'sounds/survivor_yell/3yell1.wav',
+    'sounds/survivor_yell/3yell2.wav',
+    'sounds/survivor_yell/3yell3.wav',
+    'sounds/survivor_yell/3yell4.wav',
+    'sounds/survivor_yell/3yell5.wav',
+    'sounds/survivor_yell/3yell6.wav',
+    'sounds/survivor_yell/3yell7.wav',
+    'sounds/survivor_yell/3yell8.wav',
+    'sounds/survivor_yell/3yell9.wav',
     'sounds/theme05.ogg',
     'sounds/reload.ogg',
     'sounds/weapswitch.ogg',
@@ -48,6 +58,7 @@ export const audioAPI = {
     positionalEmitters: [] as THREE.PositionalAudio[],
     globalEmitters: [] as THREE.Audio[],
     bgmElement: null as THREE.Audio | null,
+    survivorYellEmitter: null as THREE.Audio | null,
     currentBGM: '',
 
     init: (scene: THREE.Scene) => {
@@ -67,6 +78,9 @@ export const audioAPI = {
         for (let i = 0; i < 200; i++) {
             audioAPI.globalEmitters.push(new THREE.Audio(audioAPI.listener));
         }
+
+        // Dedicated emitter for survivor yells (no overlap)
+        audioAPI.survivorYellEmitter = new THREE.Audio(audioAPI.listener);
 
         audioAPI.bgmElement = new THREE.Audio(audioAPI.listener);
         audioAPI.bgmElement.setLoop(true);
@@ -90,6 +104,15 @@ export const audioAPI = {
         emitter.setVolume(volume);
         emitter.setBuffer(audioAPI.bufferCache.get(url)!);
         emitter.play();
+    },
+
+    playSurvivorYell: (url: string, volume = 0.7) => {
+        if (!audioAPI.survivorYellEmitter || !audioAPI.bufferCache.has(url)) return;
+        if (audioAPI.survivorYellEmitter.isPlaying) return; // Don't overlap
+
+        audioAPI.survivorYellEmitter.setBuffer(audioAPI.bufferCache.get(url)!);
+        audioAPI.survivorYellEmitter.setVolume(volume);
+        audioAPI.survivorYellEmitter.play();
     },
 
     playBGM: (url: string) => {

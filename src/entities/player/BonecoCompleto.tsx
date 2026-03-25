@@ -4,12 +4,13 @@ Command: npx gltfjsx@6.5.3 public/models/Boneco_Completo.glb -t
 */
 
 import * as THREE from 'three'
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF, useAnimations } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
 import { RapierRigidBody } from '@react-three/rapier'
 import { M4A1 } from './M4A1'
+import type { M4A1Ref } from './M4A1'
 
 type ActionName =
   | 'mixamo.com'
@@ -73,7 +74,11 @@ type BonecoProps = React.ComponentProps<'group'> & {
   moveStateRef: React.RefObject<'run' | 'sprint' | 'walk' | 'crouch' | 'roll'>;
 };
 
-export function BonecoCompleto({ bodyRef, isShootingRef, moveStateRef, ...props }: BonecoProps) {
+export interface BonecoRef {
+  getMuzzlePosition: () => THREE.Vector3;
+}
+
+export const BonecoCompleto = forwardRef<BonecoRef, BonecoProps>(({ bodyRef, isShootingRef, moveStateRef, ...props }, ref) => {
   const group = useRef<THREE.Group>(null)
   const { scene, animations } = useGLTF('/models/Player.glb')
 
@@ -109,6 +114,7 @@ export function BonecoCompleto({ bodyRef, isShootingRef, moveStateRef, ...props 
   }, [scene]);
 
   const weaponGroupRef = useRef<THREE.Group>(null);
+  const weaponRef = useRef<M4A1Ref>(null);
   const rightHandBone = React.useMemo(() => {
     let handBone: THREE.Bone | null = null;
     clone.traverse((child) => {
@@ -213,16 +219,22 @@ export function BonecoCompleto({ bodyRef, isShootingRef, moveStateRef, ...props 
     }
   });
 
+  useImperativeHandle(ref, () => ({
+    getMuzzlePosition: () => weaponRef.current?.getWorldPosition() || new THREE.Vector3()
+  }));
+
   return (
     <group ref={group} {...props} dispose={null}>
       <primitive object={clone} />
       {rightHandBone && (
         <group ref={weaponGroupRef}>
-          <M4A1 />
+          <M4A1 ref={weaponRef} />
         </group>
       )}
     </group>
   )
-}
+});
+
+BonecoCompleto.displayName = 'BonecoCompleto';
 
 useGLTF.preload('/models/Player.glb')

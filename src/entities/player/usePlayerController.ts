@@ -6,10 +6,12 @@ import { useStore } from '../../core/store';
 import { RapierRigidBody } from '@react-three/rapier';
 import { audioAPI } from '../../systems/AudioManager';
 import { particleAPI } from '../../systems/ParticleSystem';
+import type { BonecoRef } from './BonecoCompleto';
 
 export const usePlayerController = (
     bodyRef: React.RefObject<RapierRigidBody | null>,
-    meshRef: React.RefObject<THREE.Group | THREE.Mesh | null>
+    meshRef: React.RefObject<THREE.Group | THREE.Mesh | null>,
+    characterRef: React.RefObject<BonecoRef | null>
 ) => {
     const activeSlot = useStore((state) => state.activeSlot);
     const hotbar = useStore((state) => state.hotbar);
@@ -108,18 +110,17 @@ export const usePlayerController = (
     }, []);
 
     const shoot = () => {
-        if (!equippedWeapon || !bodyRef.current || !meshRef.current) return;
+        if (!equippedWeapon || !bodyRef.current || !meshRef.current || !characterRef.current) return;
 
         flashStartTime.current = performance.now();
 
-        const position = bodyRef.current.translation();
         const fireDir = new Vector3();
         const quaternion = new Quaternion();
 
         meshRef.current.getWorldDirection(fireDir);
         meshRef.current.getWorldQuaternion(quaternion);
 
-        const offset = 1
+        const muzzlePos = characterRef.current.getMuzzlePosition();
 
         if (equippedWeapon.type === 'machine_gun') {
             const rifleSounds = ['sounds/machine_gun/rifle.ogg', 'sounds/machine_gun/rifle2.ogg', 'sounds/machine_gun/rifle3.ogg'];
@@ -132,11 +133,6 @@ export const usePlayerController = (
         } else if (equippedWeapon.type === 'pistol') audioAPI.play2D('sounds/pistol_shot.ogg', 0.7);
 
         // Muzzle flash: hot particle burst at barrel tip
-        const muzzlePos = {
-            x: position.x + fireDir.x * offset,
-            y: (position.y as number) + 0.35,
-            z: position.z + fireDir.z * offset
-        };
         particleAPI.emit(muzzlePos, 'muzzle', equippedWeapon.type === 'shotgun' ? 20 : 10, { x: fireDir.x, y: 0, z: fireDir.z });
 
         for (let i = 0; i < equippedWeapon.stats.projectiles; i++) {
@@ -146,11 +142,7 @@ export const usePlayerController = (
             const qSpread = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), spreadAngle);
             spreadQuat.multiply(qSpread);
 
-            const startPos: [number, number, number] = [
-                position.x + fireDir.x * offset,
-                position.y + 0.35,
-                position.z + fireDir.z * offset
-            ];
+            const startPos: [number, number, number] = [muzzlePos.x, muzzlePos.y, muzzlePos.z];
 
             addProjectile({
                 id: crypto.randomUUID(),

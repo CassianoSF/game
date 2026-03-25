@@ -5,6 +5,7 @@ import type { EnemyData } from '../../core/store';
 import { useStore } from '../../core/store';
 import { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
+import { audioAPI } from '../../systems/AudioManager';
 
 export type EnemyState = 'IDLE' | 'WANDER' | 'INVESTIGATE' | 'CHASE' | 'ATTACK' | 'DEAD';
 
@@ -173,6 +174,12 @@ export function useEnemyAI(
             if (!attackHitDealt.current && attackCycleTime.current >= ATTACK_HIT_POINT) {
                 attackHitDealt.current = true;
                 useStore.getState().damagePlayer(10);
+                
+                const attackSound = `sounds/zombie_attack/${Math.floor(Math.random() * 3)}.ogg`;
+                audioAPI.play3D(attackSound, myVec, 0.8);
+                
+                const yellSound = `sounds/survivor_yell/3yell${Math.floor(Math.random() * 10)}.wav`;
+                audioAPI.playSurvivorYell(yellSound, 0.7);
             }
         } else {
             // Reset cycle when not attacking so next ATTACK starts fresh
