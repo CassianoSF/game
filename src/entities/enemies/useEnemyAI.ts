@@ -137,10 +137,8 @@ export function useEnemyAI(
                 break;
 
             case 'ATTACK':
-                if (!canSeePlayer) setState('INVESTIGATE');
-                else {
-                    const dist = myVec.distanceTo(playerPos);
-                    if (dist > 1.8) setState('CHASE');
+                if (!canSeePlayer && attackCycleTime.current >= ATTACK_HIT_POINT) {
+                    setState('INVESTIGATE');
                 }
                 break;
 
@@ -169,18 +167,28 @@ export function useEnemyAI(
             if (attackCycleTime.current >= ATTACK_ANIM_DURATION) {
                 attackCycleTime.current = 0;
                 attackHitDealt.current = false;
+                
+                // Check distance after animation completes
+                const dist = myVec.distanceTo(playerPos);
+                if (dist > 1.8) {
+                    setState('CHASE');
+                }
             }
 
-            // Apply damage at the hit frame, once per cycle
+            // Apply damage at the hit frame, once per cycle, if in range
             if (!attackHitDealt.current && attackCycleTime.current >= ATTACK_HIT_POINT) {
                 attackHitDealt.current = true;
-                useStore.getState().damagePlayer(10);
+                
+                const dist = myVec.distanceTo(playerPos);
+                if (dist <= 1.8) {
+                    useStore.getState().damagePlayer(10);
+                    
+                    const yellSound = `sounds/survivor_yell/3yell${Math.floor(Math.random() * 10)}.wav`;
+                    audioAPI.playSurvivorYell(yellSound, 0.7);
+                }
                 
                 const attackSound = `sounds/zombie_attack/${Math.floor(Math.random() * 3)}.ogg`;
                 audioAPI.play3D(attackSound, myVec, 0.8);
-                
-                const yellSound = `sounds/survivor_yell/3yell${Math.floor(Math.random() * 10)}.wav`;
-                audioAPI.playSurvivorYell(yellSound, 0.7);
             }
         } else {
             // Reset cycle when not attacking so next ATTACK starts fresh
