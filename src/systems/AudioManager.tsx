@@ -3,9 +3,9 @@ import { useThree, useLoader } from '@react-three/fiber';
 import { useEffect } from 'react';
 
 export const ASSET_LIST = [
-    'sounds/rifle_shot.ogg',
-    'sounds/shotgun_shot.ogg',
-    'sounds/pistol_shot.ogg',
+    'sounds/pistol/pistol.ogg',
+    'sounds/pistol/pistol2.ogg',
+    'sounds/pistol/pistol3.ogg',
     'sounds/machine_gun/rifle.ogg',
     'sounds/machine_gun/rifle2.ogg',
     'sounds/machine_gun/rifle3.ogg',

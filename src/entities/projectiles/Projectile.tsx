@@ -6,6 +6,7 @@ import { useFrame } from '@react-three/fiber';
 import { particleAPI } from '../../systems/ParticleSystem';
 import { audioAPI } from '../../systems/AudioManager';
 import type { ProjectileData } from '../../core/store';
+import { useIsPaused } from '../../core/pause';
 
 interface EntityUserData {
   type: string;
@@ -67,8 +68,12 @@ export const Projectile = memo(({ data }: { data: ProjectileData }) => {
         return true;
     };
 
+    const isPaused = useIsPaused();
+
     useFrame(() => {
         const now = Date.now();
+
+        if (isPaused.current) return;
 
         if (now - startTime.current > 1000) {
             useStore.getState().removeProjectile(data.id);

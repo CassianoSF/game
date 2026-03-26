@@ -4,7 +4,7 @@ import type { EnemyData } from '../../core/store';
 import * as THREE from 'three';
 import { useEnemyAI } from './useEnemyAI';
 import { zombieRendererAPI } from './ZombieRenderer';
-import { useFrame } from '@react-three/fiber';
+import { usePausedFrame } from '../../core/pause';
 import meta from '../../../public/models/VAT_Meta.json';
 import type { VATAnimation } from '../../core/config/VATConfig';
 import { ZOMBIE_ANIMATIONS } from '../../core/config/VATConfig';
@@ -13,7 +13,7 @@ import type { EnemyState } from './useEnemyAI';
 export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
     const body = useRef<RapierRigidBody | null>(null);
     const meshRef = useRef<THREE.Group | null>(null);
-    
+
     // Abstract AI Logic Decoupled
     const { state } = useEnemyAI(data, body, meshRef);
     const isDead = data.isDead;
@@ -39,7 +39,7 @@ export const Enemy = memo(function Enemy({ data }: { data: EnemyData }) {
         }
     }, [isDead]);
 
-    useFrame((_ctx, delta) => {
+    usePausedFrame((_ctx, delta) => {
         if (!zombieRendererAPI.instancedMesh || !zombieRendererAPI.frameAttribute || !meshRef.current) return;
 
         // 1. Sync Physics Matrix to the Global GPU InstancedMesh

@@ -1,11 +1,12 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import { Vector3, MathUtils, Raycaster } from 'three';
 import type { EnemyData } from '../../core/store';
 import { useStore } from '../../core/store';
 import { RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { audioAPI } from '../../systems/AudioManager';
+import { usePausedFrame } from '../../core/pause';
 
 export type EnemyState = 'IDLE' | 'WANDER' | 'INVESTIGATE' | 'CHASE' | 'ATTACK' | 'DEAD';
 
@@ -50,7 +51,7 @@ export function useEnemyAI(
     const dirToPlayer = useMemo(() => new Vector3(), []);
     const desiredVelocity = useMemo(() => new Vector3(), []);
 
-    useFrame((_stateCtx, delta) => {
+    usePausedFrame((_stateCtx, delta) => {
         if (!bodyRef.current) return;
 
         const tempRaycaster = new Raycaster();

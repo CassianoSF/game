@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Physics, RigidBody } from '@react-three/rapier';
 import { useMemo } from 'react';
@@ -9,12 +9,14 @@ import { ProceduralLevel } from './environments/ProceduralLevel';
 import { SimpleLevel } from './environments/SimpleLevel';
 import { Cursor } from './ui/Cursor';
 import { UI } from './ui/UI';
+import { MainMenu } from './ui/MainMenu';
 import { LoadingScreen } from './ui/LoadingScreen';
 import { EffectComposer, Pixelation } from '@react-three/postprocessing';
 import { ProjectileManager } from './entities/projectiles/ProjectileManager';
 import { ZombieRenderer } from './entities/enemies/ZombieRenderer';
 import { ParticleSystem } from './systems/ParticleSystem';
 import { AudioManagerInit } from './systems/AudioManager';
+import './core/pause';
 
 function Ground() {
   const texture = useMemo(() => {
@@ -52,49 +54,60 @@ function Ground() {
 
 export default function App() {
   const currentLevel = useStore((state) => state.currentLevel);
+  const gameState = useStore((state) => state.gameState);
+  const setGameState = useStore((state) => state.setGameState);
+
+  useEffect(() => {
+    (window as any).__setGameState = setGameState;
+    (window as any).__getStore = useStore.getState;
+  }, [setGameState]);
 
   return (
     <>
+      {gameState === 'menu' && <MainMenu />}
       <LoadingScreen />
-      <Canvas shadows camera={{ position: [0, 15, 10], fov: 50 }}>
-        <color attach="background" args={['#202030']} />
-        <fog attach="fog" args={['#202030', 20, 180]} />
-        <ambientLight intensity={1.5} />
-        <directionalLight
-          position={[50, 100, 25]}
-          intensity={2}
-          castShadow
-          shadow-mapSize={[4096, 4096]}
-          shadow-camera-near={0.5}
-          shadow-camera-far={500}
-          shadow-camera-left={-200}
-          shadow-camera-right={200}
-          shadow-camera-top={200}
-          shadow-camera-bottom={-200}
-        />
+      {(gameState === 'playing' || gameState === 'paused') && (
+        <Canvas shadows camera={{ position: [0, 15, 10], fov: 50 }}>
+          <color attach="background" args={['#202030']} />
+          <fog attach="fog" args={['#202030', 20, 180]} />
+          <ambientLight intensity={1.5} />
+          <directionalLight
+            position={[50, 100, 25]}
+            intensity={2}
+            castShadow
+            shadow-mapSize={[4096, 4096]}
+            shadow-camera-near={0.5}
+            shadow-camera-far={500}
+            shadow-camera-left={-200}
+            shadow-camera-right={200}
+            shadow-camera-top={200}
+            shadow-camera-bottom={-200}
+          />
 
-        <Suspense fallback={null}>
-          <Physics gravity={[0, -9.81, 0]}>
-            <Player />
+          <Suspense fallback={null}>
+            <Physics gravity={[0, -9.81, 0]} paused={gameState === 'paused'}>
 
-            {currentLevel === 'procedural' ? <ProceduralLevel /> : <SimpleLevel />}
-            <Ground />
+              <Player />
 
-            <ProjectileManager />
-            <ZombieRenderer />
-            <ParticleSystem />
-            <AudioManagerInit />
+              {currentLevel === 'procedural' ? <ProceduralLevel /> : <SimpleLevel />}
+              <Ground />
 
-          </Physics>
-        </Suspense>
+              <ProjectileManager />
+              <ZombieRenderer />
+              <ParticleSystem />
+              <AudioManagerInit />
 
-        {/* Retro Pixel Art Filter */}
-        <EffectComposer>
-          <Pixelation granularity={3} />
-        </EffectComposer>
-      </Canvas>
+            </Physics>
+          </Suspense>
+
+          {/* Retro Pixel Art Filter */}
+          <EffectComposer>
+            <Pixelation granularity={3} />
+          </EffectComposer>
+        </Canvas>
+      )}
       <Cursor />
-      <UI />
+      {(gameState === 'playing' || gameState === 'paused') && <UI />}
     </>
   );
 }

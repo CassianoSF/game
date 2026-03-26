@@ -5,7 +5,8 @@ Command: npx gltfjsx@6.5.3 public/models/Boneco_Completo.glb -t
 
 import * as THREE from 'three'
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { usePausedFrame } from '../../core/pause'
+import { useStore } from '../../core/store'
 import { useGLTF, useAnimations } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
 import { RapierRigidBody } from '@react-three/rapier'
@@ -142,7 +143,7 @@ export const BonecoCompleto = forwardRef<BonecoRef, BonecoProps>(({ bodyRef, isS
   }, [actions]);
 
   // Handle animation transitions without triggering React renders
-  useFrame(() => {
+  usePausedFrame(() => {
     let nextAction: ActionName = 'idle';
 
     // Check velocity

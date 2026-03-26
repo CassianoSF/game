@@ -4,6 +4,7 @@ import { useStore } from '../core/store';
 import { Inventory } from './Inventory';
 import { Hotbar } from './Hotbar';
 import { useState, useCallback } from 'react';
+import { PauseMenu } from './PauseMenu';
 
 export function UI() {
     const [showInventory, setShowInventory] = useState(false);
@@ -13,8 +14,13 @@ export function UI() {
     const isPlayerDead = useStore((state) => state.isPlayerDead);
     const stamina = useStore((state) => state.stamina);
     const maxStamina = useStore((state) => state.maxStamina);
+    const gameState = useStore((state) => state.gameState);
     const hpPercent = (playerHp / maxPlayerHp) * 100;
     const staminaPercent = (stamina / maxStamina) * 100;
+
+    useEffect(() => {
+        console.log('[UI] gameState changed to:', gameState);
+    }, [gameState]);
 
     useEffect(() => {
         let frameCount = 0;
@@ -37,6 +43,13 @@ export function UI() {
             if (e.key === 'Tab') {
                 e.preventDefault();
                 setShowInventory(prev => !prev);
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (gameState === 'playing' || gameState === 'paused') {
+                    console.log('[UI] ESC pressed, gameState:', gameState, 'toggling pause');
+                    useStore.getState().togglePause();
+                }
             }
             if (['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].includes(e.key)) {
                 let slot = parseInt(e.key) - 1;
@@ -62,6 +75,7 @@ export function UI() {
             pointerEvents: 'none', // Pass clicks through to Canvas by default
             zIndex: 10
         }}>
+            {gameState === 'paused' && <PauseMenu />}
             <Hotbar />
             {showInventory && <Inventory onClose={() => setShowInventory(false)} />}
 

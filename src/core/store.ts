@@ -19,6 +19,11 @@ interface GameState {
     isCameraDragging: boolean;
     stunnedEnemies: Record<string, number>;
 
+    // Game State
+    gameState: 'menu' | 'playing' | 'paused';
+    setGameState: (state: 'menu' | 'playing' | 'paused') => void;
+    togglePause: () => void;
+
     // Player HP
     playerHp: number;
     maxPlayerHp: number;
@@ -65,6 +70,9 @@ export const useStore = create<GameState>((set) => ({
     obstacles: {},
     stunnedEnemies: {}, // Init empty
     isCameraDragging: false,
+
+    // Game State
+    gameState: 'menu',
 
     // Player HP
     playerHp: 100,
@@ -134,6 +142,12 @@ export const useStore = create<GameState>((set) => ({
     resetPlayer: () => set({ playerHp: 100, isPlayerDead: false, stamina: 100 }),
     setStamina: (value) => set({ stamina: Math.max(0, Math.min(100, value)) }),
 
+    setGameState: (state) => set({ gameState: state }),
+    togglePause: () => set((state) => {
+        const newState = state.gameState === 'paused' ? 'playing' : 'paused';
+        console.log('[Store] togglePause called, current:', state.gameState, 'new:', newState);
+        return { gameState: newState };
+    }),
 
     addToInventory: (weapon) => set((state) => ({
         inventory: addToInventoryUtil(state.inventory, weapon)

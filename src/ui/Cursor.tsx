@@ -31,7 +31,7 @@ export function Cursor() {
                 border: '2px solid white',
                 borderRadius: '50%',
                 pointerEvents: 'none',
-                zIndex: 9999,
+                zIndex: 100000,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

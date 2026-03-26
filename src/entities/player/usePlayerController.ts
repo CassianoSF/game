@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Vector3, Raycaster, Plane, Quaternion, MathUtils } from 'three';
 import { useStore } from '../../core/store';
@@ -7,6 +7,7 @@ import { RapierRigidBody } from '@react-three/rapier';
 import { audioAPI } from '../../systems/AudioManager';
 import { particleAPI } from '../../systems/ParticleSystem';
 import type { BonecoRef } from './BonecoCompleto';
+import { usePausedFrame } from '../../core/pause';
 
 export const usePlayerController = (
     bodyRef: React.RefObject<RapierRigidBody | null>,
@@ -130,7 +131,11 @@ export const usePlayerController = (
             const shotgunSounds = ['sounds/shotgun/shotgun.ogg', 'sounds/shotgun/shotgun2.ogg', 'sounds/shotgun/shotgun3.ogg'];
             const randomSound = shotgunSounds[Math.floor(Math.random() * shotgunSounds.length)];
             audioAPI.play2D(randomSound, 0.35);
-        } else if (equippedWeapon.type === 'pistol') audioAPI.play2D('sounds/pistol_shot.ogg', 0.7);
+        } else if (equippedWeapon.type === 'pistol') {
+            const pistolSounds = ['sounds/pistol/pistol.ogg', 'sounds/pistol/pistol2.ogg', 'sounds/pistol/pistol3.ogg'];
+            const randomSound = pistolSounds[Math.floor(Math.random() * pistolSounds.length)];
+            audioAPI.play2D(randomSound, 0.7);
+        }
 
         // Muzzle flash: hot particle burst at barrel tip
         particleAPI.emit(muzzlePos, 'muzzle', equippedWeapon.type === 'shotgun' ? 20 : 10, { x: fireDir.x, y: 0, z: fireDir.z });
@@ -154,10 +159,10 @@ export const usePlayerController = (
         }
     };
 
-    useFrame((state, delta) => {
+    usePausedFrame((state, delta) => {
         if (!bodyRef.current || !meshRef.current) return;
 
-        // --- 0. Dead Player Freeze ---
+        // --- 0. Dead Freeze ---
         if (isPlayerDead) {
             bodyRef.current.setLinvel({ x: 0, y: bodyRef.current.linvel().y, z: 0 }, true);
             return;
